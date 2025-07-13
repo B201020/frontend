@@ -97,12 +97,19 @@ export interface SelectOptionConfig {
   color?: string;
 }
 
-export interface SelectOptionsCardFeatureConfig
-  extends LovelaceCardFeatureConfig {
+export interface SelectOptionsCardFeatureConfig {
   type: "select-options";
   style?: "dropdown" | "icons";
   options?: string[];
-  option_config?: Record<string, SelectOptionConfig>;
+  option_config?: Record<
+    string,
+    {
+      icon?: string;
+      name?: string;
+      color?: string;
+      disabled?: boolean;
+    }
+  >;
 }
 
 export interface NumericInputCardFeatureConfig {
