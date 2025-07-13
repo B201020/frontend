@@ -7870,6 +7870,8 @@
               },
               "select-options": {
                 "label": "Select options",
+                "style": "Display style",
+                "option_config": "Option configuration",
                 "options": "Options",
                 "customize_options": "Customize options"
               },

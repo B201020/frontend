@@ -92,9 +92,17 @@ export interface CounterActionsCardFeatureConfig {
   actions?: CounterActions[];
 }
 
-export interface SelectOptionsCardFeatureConfig {
+export interface SelectOptionConfig {
+  icon?: string;
+  color?: string;
+}
+
+export interface SelectOptionsCardFeatureConfig
+  extends LovelaceCardFeatureConfig {
   type: "select-options";
+  style?: "dropdown" | "icons";
   options?: string[];
+  option_config?: Record<string, SelectOptionConfig>;
 }
 
 export interface NumericInputCardFeatureConfig {

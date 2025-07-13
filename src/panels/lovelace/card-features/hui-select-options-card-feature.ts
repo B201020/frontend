@@ -1,22 +1,24 @@
-import type { PropertyValues } from "lit";
-import { html, LitElement, nothing } from "lit";
+import { mdiFormatListBulleted } from "@mdi/js";
+import type { PropertyValues, TemplateResult } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
-import memoizeOne from "memoize-one";
 import { stopPropagation } from "../../../common/dom/stop_propagation";
 import { computeDomain } from "../../../common/entity/compute_domain";
+import "../../../components/ha-control-select";
+import type { ControlSelectOption } from "../../../components/ha-control-select";
 import "../../../components/ha-control-select-menu";
 import type { HaControlSelectMenu } from "../../../components/ha-control-select-menu";
 import "../../../components/ha-list-item";
+import "../../../components/ha-icon";
+import "../../../components/ha-svg-icon";
 import { UNAVAILABLE } from "../../../data/entity";
-import type { InputSelectEntity } from "../../../data/input_select";
-import type { SelectEntity } from "../../../data/select";
 import type { HomeAssistant } from "../../../types";
 import type { LovelaceCardFeature, LovelaceCardFeatureEditor } from "../types";
 import { cardFeatureStyles } from "./common/card-feature-styles";
 import { filterModes } from "./common/filter-modes";
 import type {
-  LovelaceCardFeatureContext,
   SelectOptionsCardFeatureConfig,
+  LovelaceCardFeatureContext,
 } from "./types";
 
 export const supportsSelectOptionsCardFeature = (
@@ -28,7 +30,11 @@ export const supportsSelectOptionsCardFeature = (
     : undefined;
   if (!stateObj) return false;
   const domain = computeDomain(stateObj.entity_id);
-  return domain === "select" || domain === "input_select";
+  return (
+    (domain === "input_select" || domain === "select") &&
+    stateObj.attributes.options &&
+    Array.isArray(stateObj.attributes.options)
+  );
 };
 
 @customElement("hui-select-options-card-feature")
@@ -45,21 +51,19 @@ class HuiSelectOptionsCardFeature
   @state() _currentOption?: string;
 
   @query("ha-control-select-menu", true)
-  private _haSelect!: HaControlSelectMenu;
+  private _haSelect?: HaControlSelectMenu;
 
   private get _stateObj() {
     if (!this.hass || !this.context || !this.context.entity_id) {
       return undefined;
     }
-    return this.hass.states[this.context.entity_id!] as
-      | SelectEntity
-      | InputSelectEntity
-      | undefined;
+    return this.hass.states[this.context.entity_id!];
   }
 
   static getStubConfig(): SelectOptionsCardFeatureConfig {
     return {
       type: "select-options",
+      style: "dropdown",
     };
   }
 
@@ -93,12 +97,11 @@ class HuiSelectOptionsCardFeature
 
   protected updated(changedProps: PropertyValues) {
     super.updated(changedProps);
-    if (changedProps.has("hass")) {
+    if (this._haSelect && changedProps.has("hass")) {
       const oldHass = changedProps.get("hass") as HomeAssistant | undefined;
       if (
         this.hass &&
-        this.hass.formatEntityAttributeValue !==
-          oldHass?.formatEntityAttributeValue
+        this.hass.formatEntityState !== oldHass?.formatEntityState
       ) {
         this._haSelect.layoutOptions();
       }
@@ -106,15 +109,12 @@ class HuiSelectOptionsCardFeature
   }
 
   private async _valueChanged(ev: CustomEvent) {
-    const option = (ev.target as any).value as string;
+    const option =
+      (ev.detail as any).value ?? ((ev.target as any).value as string);
 
     const oldOption = this._stateObj!.state;
 
-    if (
-      option === oldOption ||
-      !this._stateObj!.attributes.options.includes(option)
-    )
-      return;
+    if (option === oldOption) return;
 
     this._currentOption = option;
 
@@ -127,13 +127,24 @@ class HuiSelectOptionsCardFeature
 
   private async _setOption(option: string) {
     const domain = computeDomain(this._stateObj!.entity_id);
-    await this.hass!.callService(domain, "select_option", {
+    const service =
+      domain === "input_select" ? "select_option" : "select_option";
+
+    await this.hass!.callService(domain, service, {
       entity_id: this._stateObj!.entity_id,
       option: option,
     });
   }
 
-  protected render() {
+  private _getOptionIcon(option: string): string | undefined {
+    return this._config?.option_config?.[option]?.icon;
+  }
+
+  private _getOptionColor(option: string): string | undefined {
+    return this._config?.option_config?.[option]?.color;
+  }
+
+  protected render(): TemplateResult | null {
     if (
       !this._config ||
       !this.hass ||
@@ -141,33 +152,80 @@ class HuiSelectOptionsCardFeature
       !this._stateObj ||
       !supportsSelectOptionsCardFeature(this.hass, this.context)
     ) {
-      return nothing;
+      return null;
     }
 
     const stateObj = this._stateObj;
+    const availableOptions = stateObj.attributes.options || [];
 
-    const options = this._getOptions(
-      this._stateObj.attributes.options,
-      this._config.options
-    );
+    const options = filterModes(
+      availableOptions,
+      this._config!.options
+    ).map<ControlSelectOption>((option) => {
+      const icon = this._getOptionIcon(option);
+      const label = this.hass!.formatEntityState(stateObj, option);
+
+      return {
+        value: option,
+        label: label,
+        icon: icon
+          ? html`<ha-icon slot="graphic" .icon=${icon}></ha-icon>`
+          : html`<ha-svg-icon
+              slot="graphic"
+              .path=${mdiFormatListBulleted}
+            ></ha-svg-icon>`,
+      };
+    });
+
+    if (this._config.style === "icons") {
+      return html`
+        <div class="container">
+          <ha-control-select
+            .options=${options}
+            .value=${this._currentOption || ""}
+            @value-changed=${this._valueChanged}
+            hide-label
+            .ariaLabel=${this.hass!.formatEntityAttributeName(
+              stateObj,
+              "options"
+            )}
+            .disabled=${this._stateObj!.state === UNAVAILABLE}
+          >
+          </ha-control-select>
+        </div>
+      `;
+    }
 
     return html`
       <ha-control-select-menu
         show-arrow
         hide-label
-        .label=${this.hass.localize("ui.card.select.option")}
-        .value=${stateObj.state}
-        .options=${options}
+        .label=${this.hass!.formatEntityAttributeName(stateObj, "options")}
+        .value=${this._currentOption || ""}
         .disabled=${this._stateObj.state === UNAVAILABLE}
         fixedMenuPosition
         naturalMenuWidth
         @selected=${this._valueChanged}
         @closed=${stopPropagation}
       >
+        ${this._currentOption
+          ? (() => {
+              const icon = this._getOptionIcon(this._currentOption);
+              return icon
+                ? html`<ha-icon slot="icon" .icon=${icon}></ha-icon>`
+                : html`<ha-svg-icon
+                    slot="icon"
+                    .path=${mdiFormatListBulleted}
+                  ></ha-svg-icon>`;
+            })()
+          : html`<ha-svg-icon
+              slot="icon"
+              .path=${mdiFormatListBulleted}
+            ></ha-svg-icon>`}
         ${options.map(
           (option) => html`
-            <ha-list-item .value=${option}>
-              ${this.hass!.formatEntityState(stateObj, option)}
+            <ha-list-item .value=${option.value} graphic="icon">
+              ${option.icon}${option.label}
             </ha-list-item>
           `
         )}
@@ -175,13 +233,74 @@ class HuiSelectOptionsCardFeature
     `;
   }
 
-  private _getOptions = memoizeOne(
-    (attributeOptions: string[], configOptions: string[] | undefined) =>
-      filterModes(attributeOptions, configOptions)
-  );
-
   static get styles() {
-    return cardFeatureStyles;
+    return [
+      cardFeatureStyles,
+      css`
+        .container {
+          background: var(--secondary-background-color);
+          border-radius: 12px;
+          padding: 6px;
+        }
+
+        ha-control-select {
+          --control-select-color: var(--primary-color);
+          --control-select-background: transparent;
+          --control-select-border-radius: 8px;
+          --control-select-padding: 0;
+          --control-select-thickness: 40px;
+          --control-select-button-border-radius: 8px;
+        }
+
+        ha-control-select::part(button) {
+          background: var(
+            --control-button-background-color,
+            var(--card-background-color)
+          );
+          opacity: var(--control-button-background-opacity, 1);
+          border-radius: 8px;
+          padding: 8px 12px;
+          min-height: 40px;
+          margin: 0 2px;
+          color: var(--primary-text-color);
+          font-weight: 500;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-width: 0;
+          flex: 1;
+        }
+
+        ha-control-select::part(button):hover {
+          background: var(
+            --control-button-background-color,
+            var(--secondary-background-color)
+          );
+          opacity: var(--control-button-background-opacity, 0.8);
+        }
+
+        ha-control-select::part(button)[data-selected] {
+          background: var(
+            --control-button-background-color,
+            var(--primary-color)
+          );
+          opacity: 1;
+          color: var(--text-primary-color);
+        }
+
+        ha-control-select::part(button)[data-selected] ha-icon,
+        ha-control-select::part(button)[data-selected] ha-svg-icon {
+          color: var(--text-primary-color);
+        }
+
+        ha-control-select::part(button) ha-icon,
+        ha-control-select::part(button) ha-svg-icon {
+          margin-right: 8px;
+          flex-shrink: 0;
+        }
+      `,
+    ];
   }
 }
 

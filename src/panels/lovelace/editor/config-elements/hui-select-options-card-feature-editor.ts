@@ -43,6 +43,23 @@ export class HuiSelectOptionsCardFeatureEditor
     ) =>
       [
         {
+          name: "style",
+          selector: {
+            select: {
+              options: [
+                {
+                  value: "dropdown",
+                  label: "Dropdown",
+                },
+                {
+                  value: "icons",
+                  label: "Icon buttons",
+                },
+              ],
+            },
+          },
+        },
+        {
           name: "customize_options",
           selector: {
             boolean: {},
@@ -62,6 +79,16 @@ export class HuiSelectOptionsCardFeatureEditor
                         label: formatEntityState(stateObj, option),
                       })) || [],
                   },
+                },
+              },
+            ] as const satisfies readonly HaFormSchema[])
+          : []),
+        ...(customizeOptions && this._config?.style === "icons"
+          ? ([
+              {
+                name: "option_config",
+                selector: {
+                  object: {},
                 },
               },
             ] as const satisfies readonly HaFormSchema[])
@@ -122,10 +149,18 @@ export class HuiSelectOptionsCardFeatureEditor
     schema: SchemaUnion<ReturnType<typeof this._schema>>
   ) => {
     switch (schema.name) {
+      case "style":
+        return this.hass!.localize(
+          `ui.panel.lovelace.editor.features.types.select-options.style`
+        );
       case "options":
       case "customize_options":
         return this.hass!.localize(
           `ui.panel.lovelace.editor.features.types.select-options.${schema.name}`
+        );
+      case "option_config":
+        return this.hass!.localize(
+          `ui.panel.lovelace.editor.features.types.select-options.option_config`
         );
       default:
         return "";
