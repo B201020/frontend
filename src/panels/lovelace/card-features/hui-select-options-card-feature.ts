@@ -2,6 +2,7 @@ import { mdiFormatListBulleted } from "@mdi/js";
 import type { PropertyValues, TemplateResult } from "lit";
 import { html, LitElement } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
+import { styleMap } from "lit/directives/style-map";
 import { stopPropagation } from "../../../common/dom/stop_propagation";
 import { computeDomain } from "../../../common/entity/compute_domain";
 import "../../../components/ha-control-select";
@@ -147,6 +148,10 @@ class HuiSelectOptionsCardFeature
     );
   }
 
+  private _getOptionColor(option: string): string | undefined {
+    return this._config?.option_config?.[option]?.color;
+  }
+
   private _isOptionDisabled(option: string): boolean {
     return this._config?.option_config?.[option]?.disabled || false;
   }
@@ -181,7 +186,9 @@ class HuiSelectOptionsCardFeature
           label: name,
           icon: icon
             ? html`<ha-icon slot="graphic" .icon=${icon}></ha-icon>`
-            : undefined,
+            : this._config?.style === "icons"
+              ? html`<span slot="graphic">${name}</span>`
+              : undefined,
         };
       });
 
@@ -197,10 +204,19 @@ class HuiSelectOptionsCardFeature
             "options"
           )}
           .disabled=${this._stateObj!.state === UNAVAILABLE}
+          style=${styleMap({
+            "--control-select-color": this._currentOption
+              ? this._getOptionColor(this._currentOption) || ""
+              : "",
+          })}
         >
         </ha-control-select>
       `;
     }
+
+    const currentIcon = this._currentOption
+      ? this._getOptionIcon(this._currentOption)
+      : undefined;
 
     return html`
       <ha-control-select-menu
@@ -213,32 +229,49 @@ class HuiSelectOptionsCardFeature
         naturalMenuWidth
         @selected=${this._valueChanged}
         @closed=${stopPropagation}
+        style=${styleMap({
+          "--control-select-menu-color": this._currentOption
+            ? this._getOptionColor(this._currentOption) || ""
+            : "",
+        })}
       >
-        ${this._currentOption
-          ? (() => {
-              const icon = this._getOptionIcon(this._currentOption);
-              return icon
-                ? html`<ha-icon slot="icon" .icon=${icon}></ha-icon>`
-                : html`<ha-svg-icon
-                    slot="icon"
-                    .path=${mdiFormatListBulleted}
-                  ></ha-svg-icon>`;
-            })()
+        ${currentIcon
+          ? html`<ha-icon
+              slot="icon"
+              .icon=${currentIcon}
+              style=${styleMap({
+                color: this._currentOption
+                  ? this._getOptionColor(this._currentOption) || ""
+                  : "",
+              })}
+            ></ha-icon>`
           : html`<ha-svg-icon
               slot="icon"
               .path=${mdiFormatListBulleted}
             ></ha-svg-icon>`}
-        ${options.map(
-          (option) => html`
+        ${options.map((option) => {
+          const optionIcon = this._getOptionIcon(option.value);
+          const optionName = this._getOptionName(option.value);
+          const optionColor = this._getOptionColor(option.value);
+
+          return html`
             <ha-list-item .value=${option.value} graphic="icon">
-              ${option.icon ||
-              html`<ha-svg-icon
-                slot="graphic"
-                .path=${mdiFormatListBulleted}
-              ></ha-svg-icon>`}${option.label}
+              ${optionIcon
+                ? html`<ha-icon
+                    slot="graphic"
+                    .icon=${optionIcon}
+                    style=${styleMap({
+                      color: optionColor || "",
+                    })}
+                  ></ha-icon>`
+                : html`<ha-svg-icon
+                    slot="graphic"
+                    .path=${mdiFormatListBulleted}
+                  ></ha-svg-icon>`}
+              ${optionName}
             </ha-list-item>
-          `
-        )}
+          `;
+        })}
       </ha-control-select-menu>
     `;
   }

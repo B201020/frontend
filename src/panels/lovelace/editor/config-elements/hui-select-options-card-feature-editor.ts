@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators";
 import { repeat } from "lit/directives/repeat";
 import { styleMap } from "lit/directives/style-map";
 import memoizeOne from "memoize-one";
-import { mdiDrag, mdiClose, mdiFormatListBulleted } from "@mdi/js";
+import { mdiDrag, mdiClose } from "@mdi/js";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import type { HaSwitch } from "../../../../components/ha-switch";
 import "../../../../components/ha-form/ha-form";
@@ -63,7 +63,7 @@ export class HuiSelectOptionsCardFeatureEditor
   }
 
   private _schema = memoizeOne(
-    (_customizeOptions: boolean) =>
+    (customizeOptions: boolean, _style: string) =>
       [
         {
           name: "style",
@@ -82,12 +82,23 @@ export class HuiSelectOptionsCardFeatureEditor
             },
           },
         },
-        {
-          name: "customize_options",
-          selector: {
-            boolean: {},
-          },
-        },
+        ...(customizeOptions
+          ? ([
+              {
+                name: "customize_options",
+                selector: {
+                  boolean: {},
+                },
+              },
+            ] as const)
+          : ([
+              {
+                name: "customize_options",
+                selector: {
+                  boolean: {},
+                },
+              },
+            ] as const)),
       ] as const satisfies readonly HaFormSchema[]
   );
 
@@ -294,17 +305,17 @@ export class HuiSelectOptionsCardFeatureEditor
         @drop=${this._handleDrop}
         style=${styleMap({
           opacity: isDisabled ? "0.5" : "1",
-          backgroundColor: config.color || "",
         })}
       >
         <div class="option-header">
           <ha-svg-icon class="drag-handle" .path=${mdiDrag}></ha-svg-icon>
           <div class="option-preview">
             ${config.icon
-              ? html`<ha-icon .icon=${config.icon}></ha-icon>`
-              : html`<ha-svg-icon
-                  .path=${mdiFormatListBulleted}
-                ></ha-svg-icon>`}
+              ? html`<ha-icon
+                  .icon=${config.icon}
+                  style=${styleMap({ color: config.color || "" })}
+                ></ha-icon>`
+              : nothing}
             <span class="option-name">${displayName}</span>
           </div>
           <ha-switch
@@ -340,7 +351,7 @@ export class HuiSelectOptionsCardFeatureEditor
           <ha-color-picker
             .hass=${this.hass}
             .value=${config.color || ""}
-            .label=${"Background color"}
+            .label=${"Color"}
             data-option-value=${value}
             @value-changed=${this._handleColorChange}
           ></ha-color-picker>
@@ -374,7 +385,6 @@ export class HuiSelectOptionsCardFeatureEditor
                 data-option-value=${option}
                 @click=${this._handleAddOptionClick}
               >
-                <ha-svg-icon .path=${mdiFormatListBulleted}></ha-svg-icon>
                 <span>${this.hass!.formatEntityState(stateObj, option)}</span>
               </div>
             `
@@ -394,7 +404,10 @@ export class HuiSelectOptionsCardFeatureEditor
       customize_options: this._config.options !== undefined,
     };
 
-    const schema = this._schema(data.customize_options);
+    const schema = this._schema(
+      data.customize_options,
+      data.style || "dropdown"
+    );
 
     return html`
       <ha-form
